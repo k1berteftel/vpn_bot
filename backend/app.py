@@ -4,7 +4,7 @@ import asyncio
 import urllib.parse
 
 from fastapi import APIRouter, HTTPException, Request, Query
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from services.vpn.manager import AsyncVPNManager
 from config_data.config import Config, load_config
@@ -165,10 +165,12 @@ async def get_subscription(
         request: Request
 ):
     """
-    Эндпоинт для V2rayTUN - возвращает чистый JSON конфиг
+    Эндпоинт для V2rayTUN - возвращает конфиг в правильном формате
     """
     try:
+        # Декодируем хеш чтобы получить client_id
         manager: AsyncVPNManager = request.app.state.manager
+
         decoded_hash = base64.urlsafe_b64decode(user_hash + '==').decode()
         user_id_from_hash, client_id = decoded_hash.split(':')
 
@@ -181,19 +183,56 @@ async def get_subscription(
         if not vpn_info['found']:
             raise HTTPException(status_code=404, detail="VPN not found")
 
-        # Генерируем конфиг V2ray
+        # Генерируем конфиг в формате V2ray
         v2ray_config = generate_v2ray_config(client_id, vpn_info, user_id)
 
-        # Всегда возвращаем JSON для этого эндпоинта
+        # ВАЖНО: V2rayTUN ожидает массив конфигов в Base64
+        configs = [v2ray_config]
+        config_json = json.dumps(configs, separators=(',', ':'))
+        config_base64 = base64.urlsafe_b64encode(config_json.encode()).decode()
+
+        # Определяем User-Agent
+        user_agent = request.headers.get("user-agent", "").lower()
+
+        # Если запрос от V2rayTUN - возвращаем plain text с Base64
+        if 'v2raytun' in user_agent or 'v2ray' in user_agent:
+            return Response(
+                content=config_base64,
+                media_type="text/plain; charset=utf-8"
+            )
+
+        # Для браузера возвращаем JSON
         return JSONResponse(content={
             "version": 2,
-            "servers": [v2ray_config],
+            "servers": configs,
             "remark": vpn_info['vpn_name'],
-            "status": "active"
+            "status": "active",
+            "base64": config_base64
         })
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+
+def generate_v2ray_config(client_id: str, vpn_info: dict, user_id: int) -> dict:
+    """Генерирует конфиг в правильном формате для V2ray"""
+    return {
+        "v": "2",
+        "ps": f"{vpn_info['vpn_name']}",  # Название без user_id
+        "add": config.site.domain,
+        "port": "443",
+        "id": client_id,
+        "aid": "0",
+        "scy": "auto",
+        "net": "ws",
+        "type": "none",
+        "host": config.site.domain,
+        "path": "/vpn",
+        "tls": "tls",
+        "sni": config.site.domain,
+        "alpn": "h2,http/1.1",
+        "fp": "chrome"
+    }
 
 
 @router.get("/connect")
