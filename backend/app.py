@@ -327,27 +327,6 @@ async def web_subscription_page(
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
 
 
-def generate_v2ray_config(client_id: str, vpn_info: dict, user_id: int) -> dict:
-    """Генерирует конфиг в формате V2ray"""
-    return {
-        "v": "2",
-        "ps": f"{vpn_info['vpn_name']} - {user_id}",
-        "add": config.site.domain,
-        "port": "443",
-        "id": client_id,
-        "aid": "0",
-        "scy": "auto",
-        "net": "ws",
-        "type": "none",
-        "host": config.site.domain,
-        "path": "/vpn",
-        "tls": "tls",
-        "sni": config.site.domain,
-        "alpn": "h2,http/1.1",
-        "fp": "chrome"
-    }
-
-
 def is_safe_url(url: str) -> bool:
     """Проверяет что URL безопасен для редиректа"""
     allowed_schemes = ['v2raytun://', 'https://', 'http://']
