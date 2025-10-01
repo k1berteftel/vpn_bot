@@ -165,12 +165,10 @@ async def get_subscription(
         request: Request
 ):
     """
-    Эндпоинт для V2rayTUN - возвращает конфиг в правильном формате
+    Эндпоинт для V2rayTUN с поддержкой всех специальных headers
     """
     try:
-        # Декодируем хеш чтобы получить client_id
         manager: AsyncVPNManager = request.app.state.manager
-
         decoded_hash = base64.urlsafe_b64decode(user_hash + '==').decode()
         user_id_from_hash, client_id = decoded_hash.split(':')
 
@@ -183,10 +181,10 @@ async def get_subscription(
         if not vpn_info['found']:
             raise HTTPException(status_code=404, detail="VPN not found")
 
-        # Генерируем конфиг в формате V2ray
+        # Генерируем конфиг V2ray
         v2ray_config = generate_v2ray_config(client_id, vpn_info, user_id)
 
-        # ВАЖНО: V2rayTUN ожидает массив конфигов в Base64
+        # Создаем массив конфигов (V2rayTUN ожидает массив)
         configs = [v2ray_config]
         config_json = json.dumps(configs, separators=(',', ':'))
         config_base64 = base64.urlsafe_b64encode(config_json.encode()).decode()
@@ -194,11 +192,12 @@ async def get_subscription(
         # Определяем User-Agent
         user_agent = request.headers.get("user-agent", "").lower()
 
-        # Если запрос от V2rayTUN - возвращаем plain text с Base64
+        # Если запрос от V2rayTUN - возвращаем с специальными headers
         if 'v2raytun' in user_agent or 'v2ray' in user_agent:
-            return Response(
-                content=config_base64,
-                media_type="text/plain; charset=utf-8"
+            return create_v2raytun_response(
+                config_base64=config_base64,
+                vpn_info=vpn_info,
+                user_id=user_id
             )
 
         # Для браузера возвращаем JSON
@@ -214,11 +213,55 @@ async def get_subscription(
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
 
 
+def create_v2raytun_response(config_base64: str, vpn_info: dict, user_id: int) -> Response:
+    """
+    Создает Response с специальными headers для V2rayTUN
+    """
+    # Базовые headers
+    headers = {
+        "Content-Type": "text/plain; charset=utf-8",
+    }
+
+    # 1. Profile Title (название подписки в приложении)
+    profile_title = f"{vpn_info['vpn_name']} - User {user_id}"
+    headers["profile-title"] = f"base64:{base64.b64encode(profile_title.encode()).decode()}"
+
+    # 2. Subscription Userinfo (информация о трафике)
+    upload = 0  # uploaded bytes
+    download = 0  # downloaded bytes
+
+    userinfo = f"upload={upload}; download={download}"
+    headers["subscription-userinfo"] = userinfo
+
+    # 3. Profile Update Interval (обновление каждые 24 часа)
+    headers["profile-update-interval"] = "24"
+
+    # 4. Update Always (всегда обновлять при входе)
+    headers["update-always"] = "true"
+
+    # 5. Announce (анонсы)
+    announce_text = "🎉 Welcome to our VPN service! #27e8a9Fast #ff6b6bSecure"
+    headers["announce"] = f"base64:{base64.b64encode(announce_text.encode()).decode()}"
+
+    # 6. Announce URL (ссылка при клике на анонс)
+    headers["announce-url"] = "https://t.me/your_channel"
+
+    # 7. Routing (опционально - если нужны специальные правила)
+    # routing_config = generate_routing_config()
+    # headers["routing"] = routing_config
+
+    return Response(
+        content=config_base64,
+        headers=headers,
+        media_type="text/plain; charset=utf-8"
+    )
+
+
 def generate_v2ray_config(client_id: str, vpn_info: dict, user_id: int) -> dict:
-    """Генерирует конфиг в правильном формате для V2ray"""
+    """Генерирует конфиг в формате V2ray"""
     return {
         "v": "2",
-        "ps": f"{vpn_info['vpn_name']}",  # Название без user_id
+        "ps": f"{vpn_info['vpn_name']}",
         "add": config.site.domain,
         "port": "443",
         "id": client_id,
@@ -233,6 +276,38 @@ def generate_v2ray_config(client_id: str, vpn_info: dict, user_id: int) -> dict:
         "alpn": "h2,http/1.1",
         "fp": "chrome"
     }
+
+
+def generate_routing_config() -> str:
+    """
+    Генерирует base64 encoded routing конфиг
+    Пример для России
+    """
+    routing_config = {
+        "domainStrategy": "AsIs",
+        "id": "1EAA48BB-B5F5-46C9-82D0-9FF449490794",
+        "balancers": 2,
+        "domainMatcher": "hybrid",
+        "rules": [
+            {
+                "domains": [
+                    "regex:.*\\.ru$",
+                    "geosite:category-ru"
+                ],
+                "id": "1CA62C6A-3D7A-4FE5-9E12-21822E0853E",
+                "outboundTag": "proxy",
+                "type": "field",
+                "__name__": "Direct Russia",
+                "ip": [
+                    "geoip:ru"
+                ]
+            }
+        ],
+        "name": "Example Routing"
+    }
+
+    routing_json = json.dumps(routing_config, separators=(',', ':'))
+    return base64.b64encode(routing_json.encode()).decode()
 
 
 @router.get("/connect")
