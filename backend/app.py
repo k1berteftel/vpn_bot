@@ -165,7 +165,7 @@ async def get_subscription(
         request: Request
 ):
     """
-    Эндпоинт для V2rayTUN с поддержкой всех специальных headers
+    Эндпоинт для V2rayTUN - возвращает ТОЛЬКО Base64 конфиг
     """
     try:
         manager: AsyncVPNManager = request.app.state.manager
@@ -181,32 +181,48 @@ async def get_subscription(
         if not vpn_info['found']:
             raise HTTPException(status_code=404, detail="VPN not found")
 
-        # Генерируем конфиг V2ray
-        v2ray_config = generate_v2ray_config(client_id, vpn_info, user_id)
+        # Генерируем ПРОСТОЙ конфиг V2ray (без лишних полей)
+        v2ray_config = {
+            "v": "2",
+            "ps": vpn_info['vpn_name'],  # Только имя
+            "add": config.site.domain,
+            "port": "443",
+            "id": client_id,
+            "aid": "0",
+            "net": "ws",
+            "type": "none",
+            "host": config.site.domain,
+            "path": "/vpn",
+            "tls": "tls",
+            "sni": config.site.domain
+        }
 
-        # Создаем массив конфигов (V2rayTUN ожидает массив)
+        # Создаем массив с одним конфигом и конвертируем в Base64
         configs = [v2ray_config]
-        config_json = json.dumps(configs, separators=(',', ':'))
+        config_json = json.dumps(configs)
         config_base64 = base64.urlsafe_b64encode(config_json.encode()).decode()
 
         # Определяем User-Agent
         user_agent = request.headers.get("user-agent", "").lower()
 
-        # Если запрос от V2rayTUN - возвращаем с специальными headers
+        # Для V2rayTUN возвращаем ОЧЕНЬ ПРОСТОЙ ответ
         if 'v2raytun' in user_agent or 'v2ray' in user_agent:
-            return create_v2raytun_response(
-                config_base64=config_base64,
-                vpn_info=vpn_info,
-                user_id=user_id
+            response = Response(
+                content=config_base64,
+                media_type="text/plain; charset=utf-8"
             )
 
-        # Для браузера возвращаем JSON
+            # Добавляем ОСНОВНЫЕ заголовки
+            response.headers["profile-title"] = f"base64:{base64.b64encode(vpn_info['vpn_name'].encode()).decode()}"
+            response.headers["profile-update-interval"] = "24"
+
+            return response
+
+        # Для браузера показываем информацию
         return JSONResponse(content={
-            "version": 2,
-            "servers": configs,
-            "remark": vpn_info['vpn_name'],
-            "status": "active",
-            "base64": config_base64
+            "vpn_name": vpn_info['vpn_name'],
+            "config_base64": config_base64,
+            "vless_link": f"vless://{config_base64}"
         })
 
     except Exception as e:
