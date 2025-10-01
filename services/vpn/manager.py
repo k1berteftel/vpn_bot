@@ -243,7 +243,7 @@ class AsyncVPNManager:
 
     def generate_deep_link(self, subscription_url: str) -> str:
         """Генерирует deep link для автоматического подключения"""
-        return f"v2raytun://import-sub?uri={subscription_url}"
+        return f"v2raytun://import-sub?url={subscription_url}"
 
     async def delete_vpn(self, user_id: int, client_id: str) -> bool:
         """
