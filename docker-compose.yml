@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: quest
+      POSTGRES_PASSWORD: quest
+      POSTGRES_DB: data
+    volumes:
+      - "01-simple-alchemy-postgres:/var/lib/postgresql/data"
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: always
+    ports:
+      - "127.0.0.1:8080:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: kkulis985@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: pgadmin
+    volumes:
+      - "01-simple-alchemy-pgadmin:/var/lib/pgadmin"
+    depends_on:
+      - postgres
+
+  nats:
+    image: nats:latest
+    entrypoint: /nats-server
+    command: "-c /config/server.conf"
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - ./nats/data:/data
+      - ./nats/config/server.conf:/config/server.conf
+
+volumes:
+  01-simple-alchemy-pgadmin:
+  01-simple-alchemy-postgres:

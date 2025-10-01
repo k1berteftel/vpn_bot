@@ -1,0 +1,16 @@
+aiogram
+aiogram_dialog
+APScheduler
+asyncpg
+asyncssh
+environs
+nats-py
+ormsgpack
+greenlet
+pydantic
+SQLAlchemy
+pytz
+yookassa-async
+fastapi
+uvicorn
+
