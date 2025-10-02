@@ -165,7 +165,7 @@ async def get_subscription(
         request: Request
 ):
     """
-    Эндпоинт для V2rayTUN - возвращает ТОЛЬКО Base64 конфиг
+    Эндпоинт для V2rayTUN - ВСЕГДА возвращает Base64 конфиг
     """
     try:
         manager: AsyncVPNManager = request.app.state.manager
@@ -181,10 +181,10 @@ async def get_subscription(
         if not vpn_info['found']:
             raise HTTPException(status_code=404, detail="VPN not found")
 
-        # Генерируем ПРОСТОЙ конфиг V2ray (без лишних полей)
+        # Генерируем конфиг V2ray
         v2ray_config = {
             "v": "2",
-            "ps": vpn_info['vpn_name'],  # Только имя
+            "ps": vpn_info['vpn_name'],
             "add": config.site.domain,
             "port": "443",
             "id": client_id,
@@ -205,25 +205,19 @@ async def get_subscription(
         # Определяем User-Agent
         user_agent = request.headers.get("user-agent", "").lower()
 
-        # Для V2rayTUN возвращаем ОЧЕНЬ ПРОСТОЙ ответ
-        if 'v2raytun' in user_agent or 'v2ray' in user_agent:
-            response = Response(
-                content=config_base64,
-                media_type="text/plain; charset=utf-8"
-            )
+        # Создаем response с Base64
+        response = Response(
+            content=config_base64,
+            media_type="text/plain; charset=utf-8"
+        )
 
-            # Добавляем ОСНОВНЫЕ заголовки
+        # Добавляем заголовки ТОЛЬКО для V2rayTUN
+        if 'v2raytun' in user_agent or 'v2ray' in user_agent:
             response.headers["profile-title"] = f"base64:{base64.b64encode(vpn_info['vpn_name'].encode()).decode()}"
             response.headers["profile-update-interval"] = "24"
+            response.headers["update-always"] = "true"
 
-            return response
-
-        # Для браузера показываем информацию
-        return JSONResponse(content={
-            "vpn_name": vpn_info['vpn_name'],
-            "config_base64": config_base64,
-            "vless_link": f"vless://{config_base64}"
-        })
+        return response
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
