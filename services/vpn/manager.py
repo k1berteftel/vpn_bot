@@ -93,7 +93,7 @@ class AsyncVPNManager:
             "enable": True,
             "expiryTime": 0,
             "listen": "",
-            "port": 443,
+            "port": 62789,
             "protocol": "vless",
             "settings": json.dumps({
                 "clients": [],
@@ -187,7 +187,7 @@ class AsyncVPNManager:
             "enable": True,
             "expiryTime": 0,
             "listen": "",
-            "port": 443,
+            "port": 62789,
             "protocol": "vless",
             "settings": json.dumps({
                 "clients": clients,
@@ -284,7 +284,7 @@ class AsyncVPNManager:
                 "enable": True,
                 "expiryTime": 0,
                 "listen": "",
-                "port": 443,
+                "port": 62789,
                 "protocol": "vless",
                 "settings": json.dumps({
                     "clients": clients,
@@ -364,7 +364,7 @@ class AsyncVPNManager:
                 "enable": True,
                 "expiryTime": 0,
                 "listen": "",
-                "port": 443,
+                "port": 62789,
                 "protocol": "vless",
                 "settings": json.dumps({
                     "clients": clients,
