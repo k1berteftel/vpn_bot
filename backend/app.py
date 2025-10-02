@@ -165,7 +165,7 @@ async def get_subscription(
         request: Request
 ):
     """
-    Эндпоинт для V2rayTUN - ВСЕГДА возвращает Base64 конфиг
+    Эндпоинт для V2rayTUN - возвращает VLESS ссылку в теле ответа
     """
     try:
         manager: AsyncVPNManager = request.app.state.manager
@@ -181,41 +181,47 @@ async def get_subscription(
         if not vpn_info['found']:
             raise HTTPException(status_code=404, detail="VPN not found")
 
-        # Генерируем конфиг V2ray
-        v2ray_config = {
+        # Создаем VLESS конфиг
+        vless_config = {
             "v": "2",
-            "ps": vpn_info['vpn_name'],
-            "add": config.site.domain,
-            "port": "443",
-            "id": client_id,
-            "aid": "0",
-            "net": "ws",
-            "type": "none",
-            "host": config.site.domain,
-            "path": "/vpn",
-            "tls": "tls",
-            "sni": config.site.domain
+            "ps": vpn_info['vpn_name'],  # Название в приложении
+            "add": config.site.domain,  # Домен сервера
+            "port": "443",  # Порт
+            "id": client_id,  # UUID клиента
+            "aid": "0",  # Alter ID
+            "scy": "auto",  # Шифрование
+            "net": "ws",  # Network type
+            "type": "none",  # Header type
+            "host": config.site.domain,  # Host header
+            "path": "/vpn",  # WebSocket path
+            "tls": "tls",  # TLS enabled
+            "sni": config.site.domain,  # SNI
+            "alpn": "h2,http/1.1",  # ALPN
+            "fp": "chrome"  # Fingerprint
         }
 
-        # Создаем массив с одним конфигом и конвертируем в Base64
-        configs = [v2ray_config]
-        config_json = json.dumps(configs)
+        # Конвертируем в Base64 для VLESS ссылки
+        config_json = json.dumps(vless_config, separators=(',', ':'))
         config_base64 = base64.urlsafe_b64encode(config_json.encode()).decode()
 
-        # Определяем User-Agent
-        user_agent = request.headers.get("user-agent", "").lower()
+        # Создаем VLESS ссылку
+        vless_link = f"vless://{config_base64}"
 
-        # Создаем response с Base64
+        # Создаем response с VLESS ссылкой
         response = Response(
-            content=config_base64,
+            content=vless_link,
             media_type="text/plain; charset=utf-8"
         )
 
-        # Добавляем заголовки ТОЛЬКО для V2rayTUN
+        # Добавляем заголовки для V2rayTUN
+        user_agent = request.headers.get("user-agent", "").lower()
         if 'v2raytun' in user_agent or 'v2ray' in user_agent:
             response.headers["profile-title"] = f"base64:{base64.b64encode(vpn_info['vpn_name'].encode()).decode()}"
             response.headers["profile-update-interval"] = "24"
             response.headers["update-always"] = "true"
+
+            # Добавляем информацию о трафике (бессрочно, безлимит)
+            response.headers["subscription-userinfo"] = "upload=0; download=0; total=0; expire=0"
 
         return response
 
