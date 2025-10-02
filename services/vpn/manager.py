@@ -70,7 +70,7 @@ class AsyncVPNManager:
 
                         # Ищем inbound на порту 443
                         for inbound in inbounds:
-                            if inbound.get('port') == 443 and "MAIN_VPN" in inbound.get('remark', ''):
+                            if inbound.get('port') == 62789 and "MAIN_VPN" in inbound.get('remark', ''):
                                 logger.info(f"✅ Найден основной inbound: {inbound.get('id')}")
                                 return inbound.get('id')
 
